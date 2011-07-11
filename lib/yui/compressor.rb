@@ -64,7 +64,9 @@ module YUI #:nodoc:
     #
     def compress(stream_or_string)
       streamify(stream_or_string) do |stream|
-        tempfile = Tempfile.new('yui_compress')
+        tempfile = Tempfile.new('yui_compress',
+                                :binmode => true,
+                                :internal_encoding => nil)
         tempfile.write stream.read
         tempfile.flush
 

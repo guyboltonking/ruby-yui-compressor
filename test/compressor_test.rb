@@ -36,6 +36,9 @@ module YUI
 
     FIXTURE_ERROR_JS = "var x = {class: 'name'};"
 
+    FIXTURE_MULTIBYTE_JS =
+      "var x = '\xe2\x98\x96';"
+
     def test_compressor_should_raise_when_instantiated
       assert_raises YUI::Compressor::Error do
         YUI::Compressor.new
@@ -109,6 +112,16 @@ module YUI
       assert_raise YUI::Compressor::RuntimeError do
         @compressor.compress(FIXTURE_ERROR_JS)
       end
+    end
+
+    # Encoding.default_internal is set by rails
+    def test_compress_should_handle_multibyte_charsets_in_input_when_default_internal_encoding_is_non_nil
+      old = [Encoding.default_internal, Encoding.default_external]
+      Encoding.default_internal, Encoding.default_external = ['utf-8', 'utf-8']
+      @compressor = YUI::JavaScriptCompressor.new
+      assert_equal "var x=\"\xe2\x98\x96\";".force_encoding('utf-8'),
+        @compressor.compress(FIXTURE_MULTIBYTE_JS)
+      Encoding.default_internal, Encoding.default_external = old
     end
   end
 end
