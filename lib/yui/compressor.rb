@@ -1,6 +1,6 @@
-require "popen4"
 require "shellwords"
 require "stringio"
+require "tempfile"
 
 module YUI #:nodoc:
   class Compressor
@@ -67,24 +67,30 @@ module YUI #:nodoc:
     #
     def compress(stream_or_string)
       streamify(stream_or_string) do |stream|
-        output = true
-        status = POpen4.popen4(command, "b") do |stdout, stderr, stdin, pid|
-          begin
-            stdin.binmode
-            transfer(stream, stdin)
+        tempfile = Tempfile.new('yui_compress')
+        tempfile.set_encoding 'binary'
+        tempfile.write stream.read
+        tempfile.flush
 
-            if block_given?
-              yield stdout
-            else
-              output = stdout.read
-            end
-
-          rescue Exception => e
-            raise RuntimeError, "compression failed"
+        begin
+          output = `#{command} #{tempfile.path}`
+          # Under JRuby 1.6.2 in 1.9 mode, Kernel.` always returns an
+          # unencoded string, whereas MRI 1.9 respects
+          # Encoding.default_internal/default_external, and returns a
+          # string encoded with default_internal, so...
+          if Encoding.default_internal == Encoding.default_external
+            # ...this will have no effect on MRI, as the string encoding will
+            # _already_ be default_internal, but on JRuby, it will force the
+            # result to be the same as MRI.
+            output = output.force_encoding(Encoding.default_internal)
           end
+        rescue Exception
+          raise RuntimeError, "compression failed"
+        ensure
+          tempfile.close!
         end
 
-        if status.exitstatus.zero?
+        if $?.exitstatus.zero?
           output
         else
           raise RuntimeError, "compression failed"
@@ -119,14 +125,6 @@ module YUI #:nodoc:
         else
           yield StringIO.new(stream_or_string.to_s)
         end
-      end
-
-      def transfer(from_stream, to_stream)
-        while buffer = from_stream.read(4096)
-          to_stream.write(buffer)
-        end
-        from_stream.close
-        to_stream.close
       end
 
       def command_option_for_type
