@@ -65,11 +65,22 @@ module YUI #:nodoc:
     def compress(stream_or_string)
       streamify(stream_or_string) do |stream|
         tempfile = Tempfile.new('yui_compress')
+        tempfile.set_encoding 'binary'
         tempfile.write stream.read
         tempfile.flush
 
         begin
           output = `#{command} #{tempfile.path}`
+          # Under JRuby 1.6.2 in 1.9 mode, Kernel.` always returns an
+          # unencoded string, whereas MRI 1.9 respects
+          # Encoding.default_internal/default_external, and returns a
+          # string encoded with default_internal, so...
+          if Encoding.default_internal == Encoding.default_external
+            # ...this will have no effect on MRI, as the string encoding will
+            # _already_ be default_internal, but on JRuby, it will force the
+            # result to be the same as MRI.
+            output = output.force_encoding(Encoding.default_internal)
+          end
         rescue Exception
           raise RuntimeError, "compression failed"
         ensure
